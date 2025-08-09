@@ -1,0 +1,7 @@
+
+{
+  "name": "Analgesia e controle de dor veterinária",
+  "description": "An application for assessing and managing pain in dogs and cats using veterinary pain scales. It provides scoring, interpretation, analgesic rescue guides, and AI-powered insights to support clinical decisions.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
