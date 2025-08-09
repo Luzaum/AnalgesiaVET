@@ -13,6 +13,7 @@ export enum QuestionType {
   Radio = 'radio',
   Slider = 'slider',
   Custom = 'custom',
+  Text = 'text',
 }
 
 export interface Option {
@@ -61,7 +62,7 @@ export interface Scale {
 
 export interface PainData {
   [key: string]: {
-    [key: string]: {
+    [key:string]: {
       scales: Scale[];
     };
   };
@@ -81,4 +82,51 @@ export interface AnalgesicGuideData {
     headers: string[];
     rows: GuideRow[];
   };
+}
+
+// Types for Drug Dose Calculator
+export type AgeGroup = 'adult' | 'senior' | 'puppy_kitten' | 'pregnant_lactating';
+export type Comorbidity = 'liver' | 'kidney' | 'heart' | 'gastro';
+
+export interface DoseRange {
+  min: number;
+  max: number;
+  unit: string;
+  default: number;
+}
+
+export interface Presentation {
+  id: string;
+  name: string;
+  concentration: {
+    value: number;
+    unit: 'mg/ml' | 'mg/tablet' | '%';
+  };
+}
+
+export interface AdjustmentFactors {
+  senior?: string;
+  puppy_kitten?: string;
+  pregnant_lactating?: string;
+  liver?: string;
+  kidney?: string;
+  heart?: string;
+  gastro?: string;
+}
+
+export interface Drug {
+  id: string;
+  name: string;
+  species: Species[];
+  doseRange: DoseRange;
+  presentations: Presentation[];
+  administrationNotes: string;
+  adjustmentFactors: AdjustmentFactors;
+}
+
+// Type for structured Gemini response
+export interface GeminiAnalysis {
+  clinicalAnalysis: string;
+  actionSuggestions: string;
+  importantReminders?: string;
 }

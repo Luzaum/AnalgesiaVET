@@ -1,15 +1,13 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"; // ATENÇÃO: Corrigi o nome do pacote para o oficial, pode ser necessário reinstalar.
 
-// Pega a chave da forma correta para projetos Vite, usando o nome que configuramos na Netlify
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+import { GoogleGenAI, Type } from "@google/genai";
+import { GeminiAnalysis } from './types';
 
-// Garante que a chave de API foi encontrada
-if (!apiKey) {
-  throw new Error("VITE_GEMINI_API_KEY environment variable not set");
+// Ensure the API key is available from the environment
+if (!process.env.API_KEY) {
+  throw new Error("API_KEY environment variable not set");
 }
 
-// Inicializa o cliente da IA com a chave correta
-const genAI = new GoogleGenerativeAI(apiKey);
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface PainDataContext {
   species: string;
@@ -19,15 +17,34 @@ interface PainDataContext {
   analysis: string;
 }
 
-export async function getPainAnalysis(context: PainDataContext): Promise<string> {
+// Define the JSON schema for the response
+const schema = {
+  type: Type.OBJECT,
+  properties: {
+    clinicalAnalysis: {
+      type: Type.STRING,
+      description: "Um resumo conciso do que o escore significa clinicamente, indo além da interpretação padrão."
+    },
+    actionSuggestions: {
+      type: Type.STRING,
+      description: "Recomendações claras e acionáveis de próximos passos, como analgesia de resgate, ajustes de protocolo ou monitoramento."
+    },
+    importantReminders: {
+      type: Type.STRING,
+      description: "Considerações específicas para a espécie, tipo de dor ou comorbidades. Opcional, incluir apenas se relevante."
+    }
+  },
+  required: ["clinicalAnalysis", "actionSuggestions"]
+};
+
+
+export async function getPainAnalysis(context: PainDataContext): Promise<GeminiAnalysis> {
   const speciesPortuguese = context.species === 'dog' ? 'Cão' : 'Gato';
   const painTypePortuguese = context.painType === 'acute' ? 'Aguda' : 'Crônica';
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-
   const prompt = `
-    Você é um especialista veterinário sênior em manejo da dor, fornecendo uma segunda opinião concisa para um colego veterinário.
-    Com base nos seguintes dados de avaliação, forneça uma análise profissional e sugestões. Não use formatação markdown (como ** ou *) na sua resposta. Use apenas parágrafos com quebras de linha.
+    Você é um especialista veterinário sênior em manejo da dor, fornecendo uma segunda opinião concisa para um colega veterinário.
+    Com base nos seguintes dados de avaliação, gere uma resposta JSON estruturada.
 
     Dados da Avaliação:
     - Espécie: ${speciesPortuguese}
@@ -37,24 +54,33 @@ export async function getPainAnalysis(context: PainDataContext): Promise<string>
     - Interpretação Padrão da Escala: ${context.analysis}
 
     Sua Tarefa:
-    Em 2 ou 3 parágrafos curtos, forneça:
-    1. Análise Clínica: Um resumo do que o escore significa clinicamente, além da interpretação padrão.
-    2. Sugestões de Ação: Recomendações de próximos passos, como analgesia de resgate, ajustes de protocolo ou monitoramento.
-    3. Lembretes Importantes: Considerações específicas para a espécie ou tipo de dor, se houver.
-
-    Seja direto, profissional e use terminologia técnica apropriada. O objetivo é apoiar a decisão clínica, não substituí-la.
+    Preencha os campos do schema JSON com base nos dados. Seja direto, profissional e use terminologia técnica apropriada. O objetivo é apoiar a decisão clínica, não substituí-la.
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    return text;
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      },
+    });
+
+    const jsonText = response.text.trim();
+    // Basic validation in case the response isn't valid JSON, though the model should adhere to the schema.
+    if (jsonText.startsWith('{') && jsonText.endsWith('}')) {
+        return JSON.parse(jsonText) as GeminiAnalysis;
+    } else {
+        // Handle cases where the model might fail to produce perfect JSON despite the prompt
+        console.error("Gemini response was not a valid JSON object:", jsonText);
+        throw new Error("A IA retornou uma resposta em formato inesperado.");
+    }
   } catch (error) {
     console.error("Error calling Gemini API:", error);
     if (error instanceof Error) {
-        return `Erro ao contatar a IA: ${error.message}. Verifique a chave de API e a conexão.`;
+        throw new Error(`Erro ao contatar a IA: ${error.message}. Verifique a chave de API e a conexão.`);
     }
-    return "Ocorreu um erro desconhecido ao contatar a IA.";
+    throw new Error("Ocorreu um erro desconhecido ao contatar a IA.");
   }
 }

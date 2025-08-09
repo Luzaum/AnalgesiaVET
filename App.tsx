@@ -1,12 +1,12 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Species, PainType, Scale, Question, Option, QuestionType } from './types';
-import { PAIN_DATA } from './constants';
-import { AppLogo, PawIcon, GuideIcon, SpinnerIcon } from './components/Icons';
+import { Species, PainType, Scale, Question, Option, QuestionType, Drug, Presentation, AgeGroup, Comorbidity, GeminiAnalysis } from './types';
+import { PAIN_DATA, DRUG_DATA } from './constants';
+import { AppLogo, PawIcon, GuideIcon, SpinnerIcon, CalculatorIcon } from './components/Icons';
 import { getPainAnalysis } from './gemini';
 
 
-type Screen = 'home' | 'painType' | 'scaleSelect' | 'assessment' | 'results' | 'guide' | 'clinicalGuidelines';
+type Screen = 'home' | 'painType' | 'scaleSelect' | 'assessment' | 'results' | 'guide' | 'clinicalGuidelines' | 'calculator';
 
 // Helper Components defined outside the main App component
 const Header = ({ title, onBack, onHome }: { title: string; onBack?: () => void; onHome?: () => void; }) => (
@@ -71,8 +71,9 @@ interface HomeScreenProps {
     onSelectSpecies: (species: Species) => void;
     onShowGuide: () => void;
     onShowClinicalGuidelines: () => void;
+    onShowCalculator: () => void;
 }
-const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectSpecies, onShowGuide, onShowClinicalGuidelines }) => (
+const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectSpecies, onShowGuide, onShowClinicalGuidelines, onShowCalculator }) => (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 p-4">
         <div className="text-center mb-12">
             <AppLogo className="h-auto w-52 mx-auto mb-4" />
@@ -80,7 +81,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectSpecies, onShowGuide, o
             <p className="text-slate-600 mt-2 text-lg">Avaliação e Manejo da Dor em Cães e Gatos</p>
         </div>
         <div className="w-full max-w-md">
-            <h2 className="text-2xl font-bold text-center text-slate-700 mb-6">Selecione a Espécie</h2>
+            <h2 className="text-2xl font-bold text-center text-slate-700 mb-6">Comece por aqui</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <button onClick={() => onSelectSpecies(Species.Dog)} className="group flex flex-col items-center justify-center p-8 bg-white rounded-xl shadow-md hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 h-48">
                     <span className="text-6xl mb-2 transition-transform duration-300 group-hover:scale-110">🐶</span>
@@ -92,6 +93,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectSpecies, onShowGuide, o
                 </button>
             </div>
              <div className="mt-8 flex flex-col space-y-4">
+                <button onClick={onShowCalculator} className="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors flex items-center justify-center gap-3 shadow-md hover:shadow-lg">
+                    <CalculatorIcon className="h-6 w-6" />
+                    <span>Calculadora de Doses</span>
+                </button>
                 <button onClick={onShowGuide} className="w-full bg-white text-slate-800 font-bold py-3 px-4 rounded-lg hover:bg-slate-100 transition-colors flex items-center justify-center gap-3 shadow-md hover:shadow-lg">
                     <GuideIcon className="h-6 w-6 text-teal-600" />
                     <span>Guias de Manejo da Dor</span>
@@ -149,7 +154,7 @@ const ScaleSelectionScreen: React.FC<ScaleSelectionScreenProps> = ({ species, pa
                 <h2 className="text-3xl font-bold text-slate-800 mb-8 text-center">Selecione a Escala de Avaliação</h2>
                 <div className="max-w-3xl mx-auto space-y-4">
                     {scales.map(scale => (
-                        <Card key={scale.id} className={`transition-all duration-300 border-2 ${scale.questions.length > 0 ? 'border-transparent hover:shadow-xl hover:border-teal-500' : 'border-dashed border-slate-300'} ${scale.questions.length === 0 ? 'filter blur-sm' : ''}`}>
+                        <Card key={scale.id} className={`transition-all duration-300 border-2 ${scale.questions.length > 0 ? 'border-transparent hover:shadow-xl hover:border-teal-500' : 'border-dashed border-slate-300 bg-slate-50'}`}>
                             <button onClick={() => onSelectScale(scale)} className="p-6 text-left w-full" disabled={scale.questions.length === 0}>
                                 <div className="flex justify-between items-start gap-2">
                                     <h3 className="text-xl font-bold text-slate-800 flex-grow">{scale.name}</h3>
@@ -403,15 +408,30 @@ interface AssessmentScreenProps {
     onBack: () => void;
 }
 const AssessmentScreen: React.FC<AssessmentScreenProps> = ({ scale, onSubmit, onBack }) => {
-    const [answers, setAnswers] = useState<Record<string, number | string>>({});
+    const [answers, setAnswers] = useState<Record<string, number | string>>(() => {
+        // Initialize sliders to their minimum value to avoid them being undefined
+        const initialAnswers: Record<string, number | string> = {};
+        scale.questions.forEach(q => {
+            if (q.type === QuestionType.Slider) {
+                initialAnswers[q.id] = q.min ?? 0;
+            }
+        });
+        return initialAnswers;
+    });
 
     const handleAnswerChange = (questionId: string, value: number | string) => {
         setAnswers(prev => ({ ...prev, [questionId]: value }));
     };
     
     const isComplete = useMemo(() => {
+        if (scale.id === 'csom') {
+            const name1 = answers['activity_1_name'];
+            const score1 = answers['activity_1_score'];
+            // Complete if at least the first activity name is filled and its score is set
+            return name1 && typeof name1 === 'string' && name1.trim() !== '' && score1 !== undefined;
+        }
         return scale.questions.every(q => answers[q.id] !== undefined && answers[q.id] !== '');
-    }, [answers, scale.questions]);
+    }, [answers, scale]);
 
     if (scale.id === 'ucaps') {
         return (
@@ -456,6 +476,20 @@ const AssessmentScreen: React.FC<AssessmentScreenProps> = ({ scale, onSubmit, on
         }
 
         switch (question.type) {
+            case QuestionType.Text:
+                 return (
+                    <div>
+                        <label htmlFor={question.id} className="block font-semibold text-slate-800 mb-2">{question.text}</label>
+                        <input
+                            id={question.id}
+                            type="text"
+                            value={(answers[question.id] as string) || ''}
+                            onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500"
+                            placeholder="Escreva aqui..."
+                        />
+                    </div>
+                );
             case QuestionType.Radio:
                 return (
                     <div>
@@ -1321,6 +1355,298 @@ const ClinicalGuidelinesScreen: React.FC<{ onBack: () => void }> = ({ onBack }) 
 );
 
 
+// --- START: CalculatorScreen ---
+interface CalculatorScreenProps {
+    onBack: () => void;
+    onHome: () => void;
+    onInfoClick: (title: string, content: React.ReactNode) => void;
+}
+const CalculatorScreen: React.FC<CalculatorScreenProps> = ({ onBack, onHome, onInfoClick }) => {
+    const [species, setSpecies] = useState<Species | null>(null);
+    const [weight, setWeight] = useState('');
+    const [ageGroup, setAgeGroup] = useState<AgeGroup>('adult');
+    const [comorbidities, setComorbidities] = useState<Record<Comorbidity, boolean>>({
+        liver: false, kidney: false, heart: false, gastro: false
+    });
+    const [selectedDrugId, setSelectedDrugId] = useState<string>('');
+    const [selectedPresentationId, setSelectedPresentationId] = useState<string>('');
+    const [selectedDose, setSelectedDose] = useState<number>(0);
+    
+    const availableDrugs = useMemo(() => {
+        if (!species) return [];
+        return DRUG_DATA.filter(d => d.species.includes(species));
+    }, [species]);
+
+    const selectedDrug = useMemo(() => {
+        return DRUG_DATA.find(d => d.id === selectedDrugId);
+    }, [selectedDrugId]);
+    
+    const selectedPresentation = useMemo(() => {
+        return selectedDrug?.presentations.find(p => p.id === selectedPresentationId);
+    }, [selectedDrug, selectedPresentationId]);
+
+    // Reset drug and presentation when species changes
+    useEffect(() => {
+        setSelectedDrugId('');
+        setSelectedPresentationId('');
+    }, [species]);
+
+    // Update dose and presentation when drug changes
+    useEffect(() => {
+        if (selectedDrug) {
+            setSelectedDose(selectedDrug.doseRange.default);
+            if (selectedDrug.presentations.length > 0) {
+                setSelectedPresentationId(selectedDrug.presentations[0].id);
+            } else {
+                setSelectedPresentationId('');
+            }
+        }
+    }, [selectedDrug]);
+
+    const handleComorbidityChange = (comorbidity: Comorbidity) => {
+        setComorbidities(prev => ({ ...prev, [comorbidity]: !prev[comorbidity] }));
+    };
+
+    const calculationResult = useMemo(() => {
+        const w = parseFloat(weight);
+        if (!w || w <= 0 || !selectedDrug || !selectedPresentation) {
+            return null;
+        }
+
+        const totalMg = w * selectedDose;
+        let finalAmount: number | string;
+        let finalUnit: string;
+
+        if (selectedPresentation.concentration.unit === 'mg/tablet') {
+            finalAmount = totalMg / selectedPresentation.concentration.value;
+            finalUnit = finalAmount > 1 ? 'comprimidos' : 'comprimido';
+            finalAmount = finalAmount.toFixed(2);
+        } else { // mg/ml
+            finalAmount = totalMg / selectedPresentation.concentration.value;
+            finalUnit = 'ml';
+            finalAmount = finalAmount.toFixed(2);
+        }
+        
+        const adjustmentNotes: { title: string; text: string }[] = [];
+        if (selectedDrug.adjustmentFactors) {
+            const factors = selectedDrug.adjustmentFactors;
+            if (ageGroup !== 'adult' && factors[ageGroup]) {
+                adjustmentNotes.push({ title: `Paciente ${ageGroup === 'senior' ? 'Idoso' : ageGroup === 'puppy_kitten' ? 'Filhote' : 'Gestante/Lactante'}`, text: factors[ageGroup]!});
+            }
+            Object.entries(comorbidities).forEach(([key, value]) => {
+                if (value && factors[key as Comorbidity]) {
+                    const titleMap: Record<string, string> = { liver: 'Hepatopatia', kidney: 'Nefropatia', heart: 'Cardiopatia', gastro: 'Doença Gastrointestinal' };
+                    adjustmentNotes.push({ title: `Comorbidade: ${titleMap[key]}`, text: factors[key as Comorbidity]! });
+                }
+            });
+        }
+
+        return {
+            totalMg: totalMg.toFixed(2),
+            finalAmount,
+            finalUnit,
+            adjustmentNotes,
+            administrationNotes: selectedDrug.administrationNotes
+        };
+    }, [weight, selectedDose, selectedDrug, selectedPresentation, ageGroup, comorbidities]);
+
+    const comorbidityInfo = {
+        kidney: {
+            title: "Considerações para Doença Renal",
+            content: (
+                <div className="space-y-3">
+                    <p><Bold>Risco Principal:</Bold> A maioria dos AINEs pode reduzir o fluxo sanguíneo para os rins, agravando a doença renal existente. Gatos são especialmente sensíveis.</p>
+                    <p><Bold>Boas Práticas:</Bold></p>
+                    <ul className="list-disc list-inside space-y-1 pl-4">
+                        <li><Bold>Sempre</Bold> realize exames de sangue (Ureia, Creatinina, SDMA) e urinálise antes de iniciar um AINE.</li>
+                        <li>Evite AINEs em pacientes com doença renal instável ou desidratados.</li>
+                        <li>Opte por analgésicos com menor impacto renal, como opioides (Buprenorfina, Metadona), Gabapentina, ou anticorpos monoclonais (Solensia® para gatos).</li>
+                    </ul>
+                    <p><Bold>Monitoramento:</Bold> Reavaliar a função renal e a pressão arterial 15-30 dias após iniciar a terapia e, em seguida, a cada 3-6 meses em pacientes crônicos.</p>
+                </div>
+            )
+        },
+        liver: {
+            title: "Considerações para Doença Hepática",
+            content: (
+                <div className="space-y-3">
+                    <p><Bold>Risco Principal:</Bold> Muitos analgésicos, incluindo AINEs e opioides, são metabolizados pelo fígado. Uma função hepática comprometida pode levar ao acúmulo do fármaco e toxicidade.</p>
+                    <p><Bold>Boas Práticas:</Bold></p>
+                    <ul className="list-disc list-inside space-y-1 pl-4">
+                        <li>Realize um painel bioquímico completo (ALT, AST, FA, GGT, Albumina) antes de iniciar a terapia.</li>
+                        <li>Escolha fármacos com menor metabolismo hepático (ex: Gabapentina, Pregabalina) ou que possam ser dosados com menos frequência.</li>
+                        <li>Em cães, prefira usar Prednisolona em vez de Prednisona, pois a conversão ocorre no fígado.</li>
+                        <li>Reduza a dose ou aumente o intervalo entre as doses para fármacos metabolizados hepaticamente.</li>
+                    </ul>
+                    <p><Bold>Monitoramento:</Bold> Reavaliar as enzimas hepáticas 30 dias após o início do tratamento e depois periodicamente.</li>
+                </div>
+            )
+        },
+        heart: {
+            title: "Considerações para Doença Cardíaca",
+            content: (
+                 <div className="space-y-3">
+                    <p><Bold>Risco Principal:</Bold> AINEs podem causar retenção de sódio e água, o que pode descompensar um paciente com Insuficiência Cardíaca Congestiva (ICC). Opioides podem causar bradicardia.</p>
+                    <p><Bold>Boas Práticas:</Bold></p>
+                    <ul className="list-disc list-inside space-y-1 pl-4">
+                        <li>Use AINEs com extrema cautela em pacientes com ICC. Monitore de perto por sinais de edema ou dificuldade respiratória.</li>
+                        <li>Evite o uso de AINEs em pacientes que recebem altas doses de diuréticos (ex: furosemida), pois o risco de lesão renal aumenta.</li>
+                        <li>Para opioides, use doses mais baixas e monitore a frequência cardíaca. O uso de um anticolinérgico pode ser necessário.</li>
+                        <li>Trazodona deve ser usada com muita cautela devido ao risco de arritmias.</li>
+                    </ul>
+                    <p><Bold>Monitoramento:</Bold> Monitoramento clínico da frequência respiratória em repouso, ausculta cardíaca/pulmonar e pressão arterial.</li>
+                </div>
+            )
+        },
+        gastro: {
+            title: "Considerações para Doença Gastrointestinal",
+            content: (
+                <div className="space-y-3">
+                    <p><Bold>Risco Principal:</Bold> AINEs inibem prostaglandinas que protegem a mucosa do estômago, aumentando o risco de gastrite, úlceras e sangramento.</p>
+                    <p><Bold>Boas Práticas:</Bold></p>
+                    <ul className="list-disc list-inside space-y-1 pl-4">
+                        <li><Bold>Contraindicado:</Bold> Não use AINEs em animais com histórico de úlcera ou sangramento gastrointestinal ativo.</li>
+                        <li><Bold>Proibido:</Bold> Nunca combine AINEs com corticosteroides (ex: Prednisolona). O risco de perfuração gástrica é altíssimo.</li>
+                        <li>Administre sempre os AINEs com uma refeição para minimizar a irritação direta.</li>
+                        <li>Considere o uso de AINEs mais seletivos para COX-2 ou alternativas como o Grapiprant.</li>
+                        <li>Gastroprotetores (ex: omeprazol) podem ser úteis, mas não eliminam o risco de toxicidade sistêmica.</li>
+                    </ul>
+                    <p><Bold>Monitoramento:</Bold> O tutor deve ser instruído a observar sinais como vômito, diarreia, fezes escuras (melena) ou perda de apetite e contatar o veterinário imediatamente.</p>
+                </div>
+            )
+        },
+    };
+
+    return (
+        <>
+        <Header title="Calculadora de Doses" onBack={onBack} onHome={onHome}/>
+        <main className="p-4 md:p-8">
+            <div className="max-w-4xl mx-auto space-y-6">
+                <Card className="p-6 md:p-8">
+                    <h2 className="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">1. Dados do Paciente</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Espécie</label>
+                            <div className="flex rounded-md shadow-sm">
+                                <button onClick={() => setSpecies(Species.Dog)} className={`px-4 py-2 text-sm font-medium border border-slate-300 rounded-l-md flex-1 ${species === 'dog' ? 'bg-teal-600 text-white border-teal-600 z-10' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>🐶 Cão</button>
+                                <button onClick={() => setSpecies(Species.Cat)} className={`px-4 py-2 text-sm font-medium border-r border-t border-b border-slate-300 rounded-r-md flex-1 ${species === 'cat' ? 'bg-teal-600 text-white border-teal-600 z-10' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>🐱 Gato</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="weight" className="block text-sm font-medium text-slate-700 mb-1">Peso (kg)</label>
+                            <input type="number" id="weight" value={weight} onChange={e => setWeight(e.target.value)} placeholder="Ex: 10.5" className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500"/>
+                        </div>
+                         <div>
+                            <label htmlFor="ageGroup" className="block text-sm font-medium text-slate-700 mb-1">Faixa Etária</label>
+                            <select id="ageGroup" value={ageGroup} onChange={e => setAgeGroup(e.target.value as AgeGroup)} className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500">
+                                <option value="adult">Adulto</option>
+                                <option value="senior">Idoso</option>
+                                <option value="puppy_kitten">Filhote</option>
+                                <option value="pregnant_lactating">Gestante / Lactante</option>
+                            </select>
+                        </div>
+                        <div>
+                           <label className="block text-sm font-medium text-slate-700 mb-2">Comorbidades</label>
+                             <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                {(Object.keys(comorbidities) as Comorbidity[]).map(key => {
+                                    const comorbidityName = {liver: 'Hepática', kidney: 'Renal', heart: 'Cardíaca', gastro: 'Gástrica'}[key];
+                                    const info = comorbidityInfo[key];
+                                    return (
+                                        <div key={key} className="flex items-center space-x-1">
+                                            <input type="checkbox" id={`comorbidity_${key}`} checked={comorbidities[key]} onChange={() => handleComorbidityChange(key)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                            <label htmlFor={`comorbidity_${key}`} className="text-sm cursor-pointer">{comorbidityName}</label>
+                                            <InfoButton title={info.title} content={info.content} onInfoClick={onInfoClick} />
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+
+                {species && (
+                    <Card className="p-6 md:p-8">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">2. Seleção de Fármaco e Dose</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label htmlFor="drug" className="block text-sm font-medium text-slate-700 mb-1">Fármaco</label>
+                                <select id="drug" value={selectedDrugId} onChange={e => setSelectedDrugId(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500" disabled={!species}>
+                                    <option value="" disabled>Selecione um fármaco</option>
+                                    {availableDrugs.map(drug => <option key={drug.id} value={drug.id}>{drug.name}</option>)}
+                                </select>
+                            </div>
+                             <div>
+                                <label htmlFor="presentation" className="block text-sm font-medium text-slate-700 mb-1">Apresentação Comercial</label>
+                                <select id="presentation" value={selectedPresentationId} onChange={e => setSelectedPresentationId(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500" disabled={!selectedDrug}>
+                                    {selectedDrug?.presentations.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                         {selectedDrug && (
+                            <div className="mt-6">
+                                <label htmlFor="dose" className="block text-sm font-medium text-slate-700 mb-1">Dose ({selectedDrug.doseRange.unit})</label>
+                                 <div className="flex items-center gap-4">
+                                   <span className="text-sm text-slate-600">{selectedDrug.doseRange.min}</span>
+                                    <input
+                                        id="dose"
+                                        type="range"
+                                        min={selectedDrug.doseRange.min}
+                                        max={selectedDrug.doseRange.max}
+                                        step={(selectedDrug.doseRange.max - selectedDrug.doseRange.min) / 100}
+                                        value={selectedDose}
+                                        onChange={(e) => setSelectedDose(parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                                    />
+                                     <span className="text-sm text-slate-600">{selectedDrug.doseRange.max}</span>
+                                    <span className="font-bold text-teal-700 text-lg w-20 text-center">{selectedDose.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        )}
+                    </Card>
+                )}
+
+                {calculationResult && (
+                    <Card className="p-6 md:p-8 bg-teal-50 border border-teal-200">
+                         <h2 className="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">3. Resultado</h2>
+                         <div className="text-center">
+                            <p className="text-slate-600">Dose Total Calculada</p>
+                            <p className="text-3xl font-extrabold text-teal-700 my-1">{calculationResult.totalMg} mg</p>
+                            <p className="text-slate-600">Administrar</p>
+                            <p className="text-5xl font-extrabold text-teal-900 my-2">{calculationResult.finalAmount} <span className="text-3xl font-bold">{calculationResult.finalUnit}</span></p>
+                         </div>
+
+                         {calculationResult.adjustmentNotes.length > 0 && (
+                            <div className="mt-6">
+                                <h3 className="text-lg font-bold text-amber-800 mb-2">⚠️ Atenção: Considerações Clínicas</h3>
+                                <div className="space-y-3">
+                                {calculationResult.adjustmentNotes.map((note, index) => (
+                                    <div key={index} className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 p-3 rounded-r-lg">
+                                        <p className="font-semibold">{note.title}</p>
+                                        <p className="text-sm">{note.text}</p>
+                                    </div>
+                                ))}
+                                </div>
+                            </div>
+                         )}
+
+                         <div className="mt-6">
+                             <h3 className="text-lg font-bold text-slate-800 mb-2">Notas de Administração</h3>
+                             <p className="text-slate-700 bg-slate-100 p-3 rounded-md">{calculationResult.administrationNotes}</p>
+                         </div>
+                         <div className="mt-6 text-xs text-center p-3 bg-red-100 text-red-800 rounded-lg">
+                             <p className="font-bold">AVISO IMPORTANTE</p>
+                             <p>Esta calculadora é uma ferramenta de apoio e NÃO substitui o julgamento clínico do Médico Veterinário. As doses devem ser ajustadas com base na avaliação individual do paciente e sua resposta à terapia.</p>
+                         </div>
+                    </Card>
+                )}
+            </div>
+        </main>
+        </>
+    );
+};
+// --- END: CalculatorScreen ---
+
+
 // Main App Component
 const App = () => {
     const [screen, setScreen] = useState<Screen>('home');
@@ -1333,7 +1659,7 @@ const App = () => {
 
     // State for Gemini AI Feature
     const [geminiLoading, setGeminiLoading] = useState(false);
-    const [geminiResponse, setGeminiResponse] = useState<string | null>(null);
+    const [geminiResponse, setGeminiResponse] = useState<GeminiAnalysis | null>(null);
     const [geminiError, setGeminiError] = useState<string | null>(null);
 
 
@@ -1368,6 +1694,7 @@ const App = () => {
             if (prev === 'painType') return 'home';
             if (prev === 'guide') return 'home';
             if (prev === 'clinicalGuidelines') return 'home';
+            if (prev === 'calculator') return 'home';
             return 'home';
         });
     }, []);
@@ -1378,6 +1705,8 @@ const App = () => {
         setPainType(null);
         setSelectedScale(null);
         setAnswers({});
+        setGeminiResponse(null);
+        setGeminiError(null);
     }, []);
     
     const handleShowGuide = useCallback((pt: PainType | null) => {
@@ -1387,6 +1716,10 @@ const App = () => {
     
     const handleShowClinicalGuidelines = useCallback(() => {
         setScreen('clinicalGuidelines');
+    }, []);
+
+    const handleShowCalculator = useCallback(() => {
+        setScreen('calculator');
     }, []);
     
     const handleShowDetails = useCallback((scale: Scale) => {
@@ -1451,8 +1784,10 @@ const App = () => {
                 return <GuideScreen onBack={handleRestart} onHome={handleRestart} setModal={handleSetInfoModal} initialPainType={painType} />;
             case 'clinicalGuidelines':
                 return <ClinicalGuidelinesScreen onBack={handleRestart} />;
+            case 'calculator':
+                return <CalculatorScreen onBack={handleBack} onHome={handleRestart} onInfoClick={handleSetInfoModal} />;
             default:
-                return <HomeScreen onSelectSpecies={handleSelectSpecies} onShowGuide={() => handleShowGuide(null)} onShowClinicalGuidelines={handleShowClinicalGuidelines}/>;
+                return <HomeScreen onSelectSpecies={handleSelectSpecies} onShowGuide={() => handleShowGuide(null)} onShowClinicalGuidelines={handleShowClinicalGuidelines} onShowCalculator={handleShowCalculator} />;
         }
     };
 
@@ -1502,9 +1837,24 @@ const App = () => {
                 title="Análise com IA"
             >
                 {geminiResponse && (
-                     <div className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: geminiResponse }}></div>
+                    <div className="space-y-4 text-slate-700 leading-relaxed">
+                        <div>
+                            <h4 className="font-bold text-lg text-slate-800">Análise Clínica</h4>
+                            <p>{geminiResponse.clinicalAnalysis}</p>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-lg text-slate-800">Sugestões de Ação</h4>
+                            <p>{geminiResponse.actionSuggestions}</p>
+                        </div>
+                        {geminiResponse.importantReminders && (
+                             <div>
+                                <h4 className="font-bold text-lg text-slate-800">Lembretes Importantes</h4>
+                                <p>{geminiResponse.importantReminders}</p>
+                            </div>
+                        )}
+                    </div>
                 )}
-                {geminiError && <p className="text-red-600">{geminiError}</p>}
+                {geminiError && <p className="text-red-600 font-semibold">{geminiError}</p>}
                 <p className="text-xs text-slate-500 mt-6 italic">
                     Aviso: Esta análise é gerada por inteligência artificial e serve como uma ferramenta de apoio. Não substitui o julgamento clínico profissional do médico veterinário responsável.
                 </p>
