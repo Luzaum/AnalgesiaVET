@@ -1,12 +1,15 @@
+import { GoogleGenerativeAI } from "@google/generative-ai"; // ATENÇÃO: Corrigi o nome do pacote para o oficial, pode ser necessário reinstalar.
 
-import { GoogleGenAI } from "@google/genai";
+// Pega a chave da forma correta para projetos Vite, usando o nome que configuramos na Netlify
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Ensure the API key is available from the environment
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+// Garante que a chave de API foi encontrada
+if (!apiKey) {
+  throw new Error("VITE_GEMINI_API_KEY environment variable not set");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Inicializa o cliente da IA com a chave correta
+const genAI = new GoogleGenerativeAI(apiKey);
 
 interface PainDataContext {
   species: string;
@@ -19,6 +22,8 @@ interface PainDataContext {
 export async function getPainAnalysis(context: PainDataContext): Promise<string> {
   const speciesPortuguese = context.species === 'dog' ? 'Cão' : 'Gato';
   const painTypePortuguese = context.painType === 'acute' ? 'Aguda' : 'Crônica';
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
   const prompt = `
     Você é um especialista veterinário sênior em manejo da dor, fornecendo uma segunda opinião concisa para um colego veterinário.
@@ -41,11 +46,10 @@ export async function getPainAnalysis(context: PainDataContext): Promise<string>
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    return text;
   } catch (error) {
     console.error("Error calling Gemini API:", error);
     if (error instanceof Error) {
