@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Species, PainType, Scale, Question, Option, QuestionType, Drug, Presentation, AgeGroup, Comorbidity, GeminiAnalysis } from './types';
 import { PAIN_DATA, DRUG_DATA } from './constants';
@@ -1478,7 +1477,7 @@ const CalculatorScreen: React.FC<CalculatorScreenProps> = ({ onBack, onHome, onI
                         <li>Em cães, prefira usar Prednisolona em vez de Prednisona, pois a conversão ocorre no fígado.</li>
                         <li>Reduza a dose ou aumente o intervalo entre as doses para fármacos metabolizados hepaticamente.</li>
                     </ul>
-                    <p><Bold>Monitoramento:</Bold> Reavaliar as enzimas hepáticas 30 dias após o início do tratamento e depois periodicamente.</li>
+                    <p><Bold>Monitoramento:</Bold> Reavaliar as enzimas hepáticas 30 dias após o início do tratamento e depois periodicamente.</p>
                 </div>
             )
         },
@@ -1494,7 +1493,7 @@ const CalculatorScreen: React.FC<CalculatorScreenProps> = ({ onBack, onHome, onI
                         <li>Para opioides, use doses mais baixas e monitore a frequência cardíaca. O uso de um anticolinérgico pode ser necessário.</li>
                         <li>Trazodona deve ser usada com muita cautela devido ao risco de arritmias.</li>
                     </ul>
-                    <p><Bold>Monitoramento:</Bold> Monitoramento clínico da frequência respiratória em repouso, ausculta cardíaca/pulmonar e pressão arterial.</li>
+                    <p><Bold>Monitoramento:</Bold> Monitoramento clínico da frequência respiratória em repouso, ausculta cardíaca/pulmonar e pressão arterial.</p>
                 </div>
             )
         },
